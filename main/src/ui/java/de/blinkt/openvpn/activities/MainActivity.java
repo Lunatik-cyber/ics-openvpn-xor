@@ -1,141 +1,143 @@
 /*
- * Copyright (c) 2012-2016 Arne Schwabe
- * Distributed under the GNU GPL v2 with additional terms. For full terms see the file doc/LICENSE.txt
+ * Упрощенная MainActivity для VPN приложения
  */
-
 package de.blinkt.openvpn.activities;
 
 import android.content.Intent;
-import android.net.Uri;
-import android.view.Menu;
-import android.view.MenuItem;
+import android.content.SharedPreferences;
+import android.os.Bundle;
+import android.view.View;
+import android.widget.Button;
+import android.widget.TextView;
 import android.widget.Toast;
-
-import androidx.appcompat.app.ActionBar;
-import androidx.viewpager.widget.ViewPager;
-
-import com.google.android.material.tabs.TabLayout;
+import android.app.AlertDialog;
+import android.widget.EditText;
 
 import de.blinkt.openvpn.R;
-import de.blinkt.openvpn.fragments.AboutFragment;
-import de.blinkt.openvpn.fragments.FaqFragment;
-import de.blinkt.openvpn.fragments.GeneralSettings;
-import de.blinkt.openvpn.fragments.GraphFragment;
-import de.blinkt.openvpn.fragments.ImportRemoteConfig;
-import de.blinkt.openvpn.fragments.LogFragment;
-import de.blinkt.openvpn.fragments.SendDumpFragment;
-import de.blinkt.openvpn.fragments.VPNProfileList;
-import de.blinkt.openvpn.views.ScreenSlidePagerAdapter;
-
+import de.blinkt.openvpn.core.KeyDownloader;
+import de.blinkt.openvpn.core.SimpleVPNManager;
 
 public class MainActivity extends BaseActivity {
-
-    private static final String FEATURE_TELEVISION = "android.hardware.type.television";
-    private static final String FEATURE_LEANBACK = "android.software.leanback";
-    private TabLayout mTabs;
-    private ViewPager mPager;
-    private ScreenSlidePagerAdapter mPagerAdapter;
-
-    protected void onCreate(android.os.Bundle savedInstanceState) {
+    
+    private static final String PREFS_NAME = "VpnSettings";
+    private static final String KEY_URL = "key_download_url";
+    private static final String DEFAULT_URL = "https://panel.astral-step.space/api/keys/download/test";
+    
+    private Button connectButton;
+    private Button changeUrlButton;
+    private TextView statusText;
+    private SimpleVPNManager vpnManager;
+    private KeyDownloader keyDownloader;
+    
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-        setContentView(R.layout.main_activity);
-
-
-        // Instantiate a ViewPager and a PagerAdapter.
-        mPager = findViewById(R.id.pager);
-        mPagerAdapter = new ScreenSlidePagerAdapter(getSupportFragmentManager(), this);
-
-        /* Toolbar and slider should have the same elevation */
-        disableToolbarElevation();
-
-
-        mPagerAdapter.addTab(R.string.vpn_list_title, VPNProfileList.class);
-        mPagerAdapter.addTab(R.string.graph, GraphFragment.class);
-
-        mPagerAdapter.addTab(R.string.generalsettings, GeneralSettings.class);
-        mPagerAdapter.addTab(R.string.faq, FaqFragment.class);
-
-        if (SendDumpFragment.getLastestDump(this) != null) {
-            mPagerAdapter.addTab(R.string.crashdump, SendDumpFragment.class);
+        setContentView(R.layout.activity_simple_main);
+        
+        initViews();
+        initManagers();
+        checkFirstRun();
+        updateUI();
+    }
+    
+    private void initViews() {
+        connectButton = findViewById(R.id.btn_connect);
+        changeUrlButton = findViewById(R.id.btn_change_url);
+        statusText = findViewById(R.id.text_status);
+        
+        connectButton.setOnClickListener(v -> toggleConnection());
+        changeUrlButton.setOnClickListener(v -> showChangeUrlDialog());
+    }
+    
+    private void initManagers() {
+        vpnManager = new SimpleVPNManager(this);
+        keyDownloader = new KeyDownloader();
+    }
+    
+    private void checkFirstRun() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        String savedUrl = prefs.getString(KEY_URL, null);
+        
+        if (savedUrl == null) {
+            showFirstTimeSetupDialog();
         }
-
-
-        if (isAndroidTV())
-            mPagerAdapter.addTab(R.string.openvpn_log, LogFragment.class);
-
-        mPagerAdapter.addTab(R.string.about, AboutFragment.class);
-        mPager.setAdapter(mPagerAdapter);
     }
-
-
-    private void disableToolbarElevation() {
-        ActionBar toolbar = getSupportActionBar();
-        toolbar.setElevation(0);
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        Intent intent = getIntent();
-        if (intent != null) {
-            String action = intent.getAction();
-            if (Intent.ACTION_VIEW.equals(action))
-            {
-                Uri uri = intent.getData();
-                if (uri != null)
-                    checkUriForProfileImport(uri);
+    
+    private void showFirstTimeSetupDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Настройка VPN");
+        builder.setMessage("Введите ссылку для загрузки ключа:");
+        
+        final EditText input = new EditText(this);
+        input.setText(DEFAULT_URL);
+        builder.setView(input);
+        
+        builder.setPositiveButton("Сохранить", (dialog, which) -> {
+            String url = input.getText().toString().trim();
+            if (!url.isEmpty()) {
+                saveKeyUrl(url);
             }
-            String page = intent.getStringExtra("PAGE");
-            if ("graph".equals(page)) {
-                mPager.setCurrentItem(1);
+        });
+        
+        builder.setCancelable(false);
+        builder.show();
+    }
+    
+    private void showChangeUrlDialog() {
+        // Аналогично showFirstTimeSetupDialog, но с возможностью отмены
+    }
+    
+    private void saveKeyUrl(String url) {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        prefs.edit().putString(KEY_URL, url).apply();
+    }
+    
+    private void toggleConnection() {
+        if (vpnManager.isConnected()) {
+            vpnManager.disconnect();
+        } else {
+            connectToVPN();
+        }
+        updateUI();
+    }
+    
+    private void connectToVPN() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        String keyUrl = prefs.getString(KEY_URL, DEFAULT_URL);
+        
+        // Показать прогресс
+        statusText.setText("Загрузка ключа...");
+        connectButton.setEnabled(false);
+        
+        keyDownloader.downloadKey(keyUrl, new KeyDownloader.DownloadCallback() {
+            @Override
+            public void onSuccess(String ovpnConfig) {
+                runOnUiThread(() -> {
+                    vpnManager.connectWithConfig(ovpnConfig);
+                    updateUI();
+                });
             }
-            setIntent(null);
-        }
-    }
-
-    private void checkUriForProfileImport(Uri uri) {
-        if ("openvpn".equals(uri.getScheme()) && "import-profile".equals(uri.getHost()))
-        {
-            String realUrl = uri.getEncodedPath() + "?" + uri.getEncodedQuery();
-            if (!realUrl.startsWith("/https://"))
-            {
-                Toast.makeText(this, "Cannot use openvpn://import-profile/ URL that does not use https://", Toast.LENGTH_LONG).show();
-                return;
+            
+            @Override
+            public void onError(String error) {
+                runOnUiThread(() -> {
+                    Toast.makeText(MainActivity.this, "Ошибка: " + error, Toast.LENGTH_LONG).show();
+                    updateUI();
+                });
             }
-            realUrl = realUrl.substring(1);
-            startOpenVPNUrlImport(realUrl);
-        }
+        });
     }
-
-    private void startOpenVPNUrlImport(String url) {
-        ImportRemoteConfig asImportFrag = ImportRemoteConfig.newInstance(url);
-        asImportFrag.show(getSupportFragmentManager(), "dialog");
+    
+    private void updateUI() {
+        boolean isConnected = vpnManager.isConnected();
+        
+        connectButton.setText(isConnected ? "Отключиться" : "Подключиться");
+        connectButton.setEnabled(true);
+        
+        statusText.setText(isConnected ? "Подключено" : "Отключено");
+        
+        // Обновить цвет статуса
+        int color = isConnected ? getColor(R.color.connected) : getColor(R.color.disconnected);
+        statusText.setTextColor(color);
     }
-
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        getMenuInflater().inflate(R.menu.main_menu, menu);
-        return super.onCreateOptionsMenu(menu);
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        if (item.getItemId() == R.id.show_log) {
-            Intent showLog = new Intent(this, LogWindow.class);
-            startActivity(showLog);
-        }
-        return super.onOptionsItemSelected(item);
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-
-        System.out.println(data);
-
-
-    }
-
-
 }

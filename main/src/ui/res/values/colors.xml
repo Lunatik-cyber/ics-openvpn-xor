@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Добавить к существующим цветам -->
+    <color name="connected">#4CAF50</color>
+    <color name="disconnected">#F44336</color>
+    <color name="primary">#1976D2</color>
+</resources>
