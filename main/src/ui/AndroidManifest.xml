@@ -19,9 +19,11 @@
     <uses-sdk tools:overrideLibrary="androidx.security"/>
 
     <application android:banner="@mipmap/banner_tv">
+        <!-- AstroVPN Main Activity -->
         <activity
                 android:exported="true"
-                android:name=".activities.MainActivity"
+                android:name=".astrovpn.AstroVPNMainActivity"
+                android:theme="@style/blinkt"
                 tools:ignore="ExportedActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -33,6 +35,14 @@
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" />
             </intent-filter>
+            <!-- AstroVPN URL handling -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="astrovpn" />
+            </intent-filter>
+            <!-- Legacy OpenVPN URL support -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -40,6 +50,13 @@
                 <data android:scheme="openvpn" />
                 <data android:host="import-profile" />
             </intent-filter>
+        </activity>
+
+        <!-- Original MainActivity (kept for compatibility) -->
+        <activity
+                android:exported="false"
+                android:name=".activities.MainActivity"
+                tools:ignore="ExportedActivity">
         </activity>
         <activity android:name=".activities.InternalWebView" />
         <activity
