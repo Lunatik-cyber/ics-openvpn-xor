@@ -85,7 +85,7 @@ public class AboutFragment extends Fragment implements View.OnClickListener {
         TextView verO3 = v.findViewById(R.id.version_ovpn3);
 
         verO2.setText(String.format(Locale.US, "OpenVPN version: %s", NativeUtils.getOpenVPN2GitVersion()));
-        verO3.setText(String.format(Locale.US, "OpenVPN3 core version: %s", NativeUtils.getOpenVPN3GitVersion()));
+        verO3.setText("OpenVPN3 core: disabled (using OpenVPN2 only)");
 
         /* recreating view without onCreate/onDestroy cycle */
         TextView translation = (TextView) v.findViewById(R.id.translation);

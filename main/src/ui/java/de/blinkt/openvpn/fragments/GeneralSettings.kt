@@ -61,11 +61,11 @@ class GeneralSettings : PreferenceFragmentCompat(), Preference.OnPreferenceClick
         clearapi.onPreferenceClickListener = this
         findPreference<Preference>("osslspeed")!!.onPreferenceClickListener = this
         if (devHacks.preferenceCount == 0) preferenceScreen.removePreference(devHacks)
-        if (!BuildConfig.openvpn3) {
-            val appBehaviour = findPreference<Preference>("app_behaviour") as PreferenceCategory
-            val ovpn3 = findPreference<Preference>("ovpn3") as CheckBoxPreference
-            ovpn3.isEnabled = false
-            ovpn3.isChecked = false
+        // Remove OpenVPN3 preference completely since OpenVPN3 support is disabled
+        val appBehaviour = findPreference<Preference>("app_behaviour") as PreferenceCategory
+        val ovpn3 = findPreference<Preference>("ovpn3") as CheckBoxPreference?
+        if (ovpn3 != null) {
+            appBehaviour.removePreference(ovpn3)
         }
 
         val startOnBoot =

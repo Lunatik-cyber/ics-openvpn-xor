@@ -28,7 +28,7 @@ public class NativeUtils {
 
     public static native String getOpenVPN2GitVersion();
 
-    public static native String getOpenVPN3GitVersion();
+    // getOpenVPN3GitVersion removed - OpenVPN3 support disabled
 
     static boolean rsspssloaded = false;
 

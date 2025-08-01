@@ -51,7 +51,7 @@ public class ShowConfigFragment extends Fragment {
 				/* Add a few newlines to make the textview scrollable past the FAB */
 				try {
 
-					configtext = vp.getConfigFile(requireContext(), VpnProfile.doUseOpenVPN3(getActivity())) + "\n\n\n";
+					configtext = vp.getConfigFile(requireContext(), false) + "\n\n\n"; // Always use OpenVPN2
 				} catch (Exception e) {
 					e.printStackTrace();
 					configtext = "Error generating config file: " + e.getLocalizedMessage();

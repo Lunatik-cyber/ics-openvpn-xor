@@ -211,11 +211,8 @@ public class VpnProfile implements Serializable, Cloneable {
     }
 
     public static boolean doUseOpenVPN3(Context c) {
-        SharedPreferences prefs = Preferences.getDefaultSharedPreferences(c);
-        boolean useOpenVPN3 = prefs.getBoolean("ovpn3", false);
-        if (!BuildConfig.openvpn3)
-            useOpenVPN3 = false;
-        return useOpenVPN3;
+        // OpenVPN3 support removed - always use OpenVPN2
+        return false;
     }
 
     //! Put inline data inline and other data as normal escaped filename
@@ -366,14 +363,14 @@ public class VpnProfile implements Serializable, Cloneable {
     }
 
     public String getConfigFile(Context context, boolean configForOvpn3) {
+        // configForOvpn3 parameter ignored - always generate OpenVPN2 config
 
         File cacheDir = context.getCacheDir();
         StringBuilder cfg = new StringBuilder();
 
-        if (!configForOvpn3) {
-            // Enable management interface
-            cfg.append("# Config for OpenVPN 2.x\n");
-            cfg.append("# Enables connection to GUI\n");
+        // Enable management interface - OpenVPN2 only
+        cfg.append("# Config for OpenVPN 2.x\n");
+        cfg.append("# Enables connection to GUI\n");
             cfg.append("management ");
 
             cfg.append(cacheDir.getAbsolutePath()).append("/").append("mgmtsocket");
@@ -402,10 +399,9 @@ public class VpnProfile implements Serializable, Cloneable {
         }
 
 
-        if (!configForOvpn3) {
-            cfg.append("machine-readable-output\n");
-            if (!mIsOpenVPN22)
-                cfg.append("allow-recursive-routing\n");
+        cfg.append("machine-readable-output\n");
+        if (!mIsOpenVPN22)
+            cfg.append("allow-recursive-routing\n");
 
             // Users are confused by warnings that are misleading...
             cfg.append("ifconfig-nowarn\n");
@@ -454,7 +450,7 @@ public class VpnProfile implements Serializable, Cloneable {
         boolean canUsePlainRemotes = true;
 
         if (mConnections.length == 1) {
-            cfg.append(mConnections[0].getConnectionBlock(configForOvpn3));
+            cfg.append(mConnections[0].getConnectionBlock());
         } else {
             for (Connection conn : mConnections) {
                 canUsePlainRemotes = canUsePlainRemotes && conn.isOnlyRemote();
@@ -466,7 +462,7 @@ public class VpnProfile implements Serializable, Cloneable {
             if (canUsePlainRemotes) {
                 for (Connection conn : mConnections) {
                     if (conn.mEnabled) {
-                        cfg.append(conn.getConnectionBlock(configForOvpn3));
+                        cfg.append(conn.getConnectionBlock());
                     }
                 }
             }
@@ -501,38 +497,33 @@ public class VpnProfile implements Serializable, Cloneable {
                 cfg.append("auth-user-pass\n");
             case VpnProfile.TYPE_KEYSTORE:
             case VpnProfile.TYPE_EXTERNAL_APP:
-                if (!configForOvpn3) {
-                    String[] ks = getExternalCertificates(context);
-                    cfg.append("### From Keystore/ext auth app ####\n");
-                    if (ks != null) {
-                        if (!TextUtils.isEmpty(mCaFilename)) {
-                            cfg.append(insertFileData("ca", mCaFilename));
-                        } else if (!TextUtils.isEmpty(ks[0]) && !mCheckPeerFingerprint) {
-                            /* if we have enabled peer-fingerprint verification the certificate from
-                             * the keystore is more likely to screw things up than to fix anything
-                             */
-                            cfg.append("<ca>\n").append(ks[0]).append("\n</ca>\n");
-                        }
-                        if (!TextUtils.isEmpty(ks[1]))
-                            cfg.append("<extra-certs>\n").append(ks[1]).append("\n</extra-certs>\n");
-                        cfg.append("<cert>\n").append(ks[2]).append("\n</cert>\n");
-                        cfg.append("management-external-key nopadding pkcs1 pss digest\n");
-                    } else {
-                        cfg.append(context.getString(R.string.keychain_access)).append("\n");
-                        if (Build.VERSION.SDK_INT == Build.VERSION_CODES.JELLY_BEAN)
-                            if (!mAlias.matches("^[a-zA-Z0-9]$"))
-                                cfg.append(context.getString(R.string.jelly_keystore_alphanumeric_bug)).append("\n");
+                String[] ks = getExternalCertificates(context);
+                cfg.append("### From Keystore/ext auth app ####\n");
+                if (ks != null) {
+                    if (!TextUtils.isEmpty(mCaFilename)) {
+                        cfg.append(insertFileData("ca", mCaFilename));
+                    } else if (!TextUtils.isEmpty(ks[0]) && !mCheckPeerFingerprint) {
+                        /* if we have enabled peer-fingerprint verification the certificate from
+                         * the keystore is more likely to screw things up than to fix anything
+                         */
+                        cfg.append("<ca>\n").append(ks[0]).append("\n</ca>\n");
                     }
+                    if (!TextUtils.isEmpty(ks[1]))
+                        cfg.append("<extra-certs>\n").append(ks[1]).append("\n</extra-certs>\n");
+                    cfg.append("<cert>\n").append(ks[2]).append("\n</cert>\n");
+                    cfg.append("management-external-key nopadding pkcs1 pss digest\n");
+                } else {
+                    cfg.append(context.getString(R.string.keychain_access)).append("\n");
+                    if (Build.VERSION.SDK_INT == Build.VERSION_CODES.JELLY_BEAN)
+                        if (!mAlias.matches("^[a-zA-Z0-9]$"))
+                            cfg.append(context.getString(R.string.jelly_keystore_alphanumeric_bug)).append("\n");
                 }
                 break;
             case VpnProfile.TYPE_USERPASS:
                 cfg.append("auth-user-pass\n");
                 if (!TextUtils.isEmpty(mCaFilename))
                     cfg.append(insertFileData("ca", mCaFilename));
-                if (configForOvpn3) {
-                    // OpenVPN 3 needs to be told that a client certificate is not required
-                    cfg.append("client-cert-not-required\n");
-                }
+                // OpenVPN3 client-cert-not-required removed - using OpenVPN2 only
         }
 
         if (mCheckPeerFingerprint) {
@@ -625,10 +616,8 @@ public class VpnProfile implements Serializable, Cloneable {
 
         if (mMssFix != 0) {
             if (mMssFix != 1450) {
-                if (configForOvpn3)
-                    cfg.append(String.format(Locale.US, "mssfix %d mtu\n", mMssFix));
-                else
-                    cfg.append(String.format(Locale.US, "mssfix %d\n", mMssFix));
+                // Always use OpenVPN2 format
+                cfg.append(String.format(Locale.US, "mssfix %d\n", mMssFix));
             } else
                 cfg.append("mssfix\n");
         }
@@ -714,7 +703,7 @@ public class VpnProfile implements Serializable, Cloneable {
 
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
         boolean usesystemproxy = prefs.getBoolean("usesystemproxy", true);
-        if (usesystemproxy && !mIsOpenVPN22 && !configForOvpn3 && !usesExtraProxyOptions()) {
+        if (usesystemproxy && !mIsOpenVPN22 && !usesExtraProxyOptions()) {
             cfg.append("# Use system proxy setting\n");
             cfg.append("management-query-proxy\n");
         }
@@ -733,7 +722,7 @@ public class VpnProfile implements Serializable, Cloneable {
             for (Connection conn : mConnections) {
                 if (conn.mEnabled) {
                     cfg.append("<connection>\n");
-                    cfg.append(conn.getConnectionBlock(configForOvpn3));
+                    cfg.append(conn.getConnectionBlock());
                     cfg.append("</connection>\n");
                 }
             }
