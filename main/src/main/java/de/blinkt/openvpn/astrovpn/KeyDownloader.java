@@ -109,7 +109,9 @@ public class KeyDownloader {
      * Get IP address from domain_service endpoint
      * Expected response format: {"ip": "192.168.1.1"}
      */
-    private String getResolvedIpFromDomainService(String domainServiceUrl) throws DownloadException {
+    private String getResolvedIpFromDomainService(String domainService) throws DownloadException {
+        // Convert hostname:port format to full URL if needed
+        String domainServiceUrl = normalizeDomainServiceUrl(domainService);
         Log.d(TAG, "Querying domain service: " + domainServiceUrl);
         
         HttpURLConnection connection = null;
@@ -264,6 +266,28 @@ public class KeyDownloader {
         }
         
         return response.toString().trim();
+    }
+    
+    /**
+     * Normalize domain service URL from hostname:port or full URL format
+     */
+    private String normalizeDomainServiceUrl(String domainService) throws DownloadException {
+        if (TextUtils.isEmpty(domainService)) {
+            throw new DownloadException("Domain service cannot be empty");
+        }
+        
+        // If it's already a full URL, return as-is
+        if (domainService.startsWith("http://") || domainService.startsWith("https://")) {
+            return domainService;
+        }
+        
+        // If it's hostname:port format, convert to HTTP URL
+        if (domainService.contains(":")) {
+            return "http://" + domainService;
+        }
+        
+        // If it's just a hostname, assume default HTTP port
+        return "http://" + domainService;
     }
     
     /**

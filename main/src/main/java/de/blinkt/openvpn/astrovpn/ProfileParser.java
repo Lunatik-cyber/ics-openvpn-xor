@@ -30,6 +30,7 @@ public class ProfileParser {
     // Required fields in AstroVPN profile JSON
     private static final String FIELD_NAME = "name";
     private static final String FIELD_SERVER = "server";
+    private static final String FIELD_DOMAIN_IP = "domain_ip"; // Alternative to server
     private static final String FIELD_DOMAIN_SERVICE = "domain_service";
     private static final String FIELD_KEY_URL = "key_url";
     private static final String FIELD_DESCRIPTION = "description";
@@ -167,15 +168,35 @@ public class ProfileParser {
      */
     private static AstroVPNProfile validateAndExtractProfile(JSONObject json) throws ParseException {
         try {
-            // Extract and validate required fields
-            String name = getRequiredString(json, FIELD_NAME);
-            String server = getRequiredString(json, FIELD_SERVER);
-            String domainService = getRequiredString(json, FIELD_DOMAIN_SERVICE);
+            // Extract key_url (always required)
             String keyUrl = getRequiredString(json, FIELD_KEY_URL);
+            
+            // Extract domain_service (always required) 
+            String domainService = getRequiredString(json, FIELD_DOMAIN_SERVICE);
+            
+            // Extract server field - can be either 'server' or 'domain_ip'
+            String server = null;
+            if (json.has(FIELD_SERVER) && !TextUtils.isEmpty(json.optString(FIELD_SERVER))) {
+                server = json.getString(FIELD_SERVER);
+            } else if (json.has(FIELD_DOMAIN_IP) && !TextUtils.isEmpty(json.optString(FIELD_DOMAIN_IP))) {
+                server = json.getString(FIELD_DOMAIN_IP);
+            } else {
+                throw new ParseException("Missing required field: either 'server' or 'domain_ip' must be provided");
+            }
+            
+            // Extract name (optional, generate from server if not provided)
+            String name;
+            if (json.has(FIELD_NAME) && !TextUtils.isEmpty(json.optString(FIELD_NAME))) {
+                name = json.getString(FIELD_NAME);
+            } else {
+                // Generate name from server
+                name = "AstroVPN (" + server + ")";
+            }
+            
             String description = json.optString(FIELD_DESCRIPTION, "");
             
             // Additional validation
-            validateUrl(domainService, "domain_service");
+            validateDomainService(domainService, "domain_service");
             validateUrl(keyUrl, "key_url");
             
             Log.i(TAG, "Successfully parsed AstroVPN profile: " + name);
@@ -215,6 +236,48 @@ public class ProfileParser {
         } catch (Exception e) {
             throw new ParseException("Invalid URL in field " + fieldName + ": " + url, e);
         }
+    }
+    
+    /**
+     * Validate domain service - can be either full URL or hostname:port format
+     */
+    private static void validateDomainService(String domainService, String fieldName) throws ParseException {
+        if (TextUtils.isEmpty(domainService)) {
+            throw new ParseException(fieldName + " cannot be empty");
+        }
+        
+        // Check if it's a full URL format
+        if (domainService.startsWith("http://") || domainService.startsWith("https://")) {
+            validateUrl(domainService, fieldName);
+            return;
+        }
+        
+        // Check if it's hostname:port format
+        if (domainService.contains(":")) {
+            String[] parts = domainService.split(":");
+            if (parts.length == 2) {
+                String hostname = parts[0];
+                String port = parts[1];
+                
+                // Basic hostname validation
+                if (TextUtils.isEmpty(hostname) || hostname.length() < 3) {
+                    throw new ParseException(fieldName + " hostname is too short: " + hostname);
+                }
+                
+                // Basic port validation
+                try {
+                    int portNum = Integer.parseInt(port);
+                    if (portNum < 1 || portNum > 65535) {
+                        throw new ParseException(fieldName + " port out of range: " + port);
+                    }
+                } catch (NumberFormatException e) {
+                    throw new ParseException(fieldName + " invalid port number: " + port);
+                }
+                return;
+            }
+        }
+        
+        throw new ParseException(fieldName + " must be either a URL or hostname:port format");
     }
     
     /**
