@@ -7,7 +7,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-          target: [Skeleton]
+          target: [Ui]
     name: "Release ${{ matrix.target }}"
     runs-on: ubuntu-latest
     steps:
