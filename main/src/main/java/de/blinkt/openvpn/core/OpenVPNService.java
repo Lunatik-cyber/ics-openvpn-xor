@@ -583,31 +583,22 @@ public class OpenVPNService extends VpnService implements StateListener, Callbac
         mStarting = false;
 
         // Start a new session by creating a new thread.
-        boolean useOpenVPN3 = VpnProfile.doUseOpenVPN3(this);
+        // OpenVPN3 support removed - always use OpenVPN2
 
         // Open the Management Interface
-        if (!useOpenVPN3) {
-            // start a Thread that handles incoming messages of the management socket
-            OpenVpnManagementThread ovpnManagementThread = new OpenVpnManagementThread(mProfile, this);
-            if (ovpnManagementThread.openManagementInterface(this)) {
-                Thread mSocketManagerThread = new Thread(ovpnManagementThread, "OpenVPNManagementThread");
-                mSocketManagerThread.start();
-                mManagement = ovpnManagementThread;
-                VpnStatus.logInfo("started Socket Thread");
-            } else {
-                endVpnService();
-                return;
-            }
+        // start a Thread that handles incoming messages of the management socket
+        OpenVpnManagementThread ovpnManagementThread = new OpenVpnManagementThread(mProfile, this);
+        if (ovpnManagementThread.openManagementInterface(this)) {
+            Thread mSocketManagerThread = new Thread(ovpnManagementThread, "OpenVPNManagementThread");
+            mSocketManagerThread.start();
+            mManagement = ovpnManagementThread;
+            VpnStatus.logInfo("started Socket Thread");
+        } else {
+            endVpnService();
+            return;
         }
 
-        Runnable processThread;
-        if (useOpenVPN3) {
-            OpenVPNManagement mOpenVPN3 = instantiateOpenVPN3Core();
-            processThread = (Runnable) mOpenVPN3;
-            mManagement = mOpenVPN3;
-        } else {
-            processThread = new OpenVPNThread(this, argv, nativeLibraryDirectory, tmpDir);
-        }
+        Runnable processThread = new OpenVPNThread(this, argv, nativeLibraryDirectory, tmpDir);
 
         mProcessThread = new Thread(processThread, "OpenVPNProcessThread");
 
@@ -615,14 +606,12 @@ public class OpenVPNService extends VpnService implements StateListener, Callbac
             mProcessThread.start();
         }
 
-        if (!useOpenVPN3) {
-            try {
-                mProfile.writeConfigFileOutput(this, ((OpenVPNThread) processThread).getOpenVPNStdin());
-            } catch (IOException | ExecutionException | InterruptedException e) {
-                VpnStatus.logException("Error generating config file", e);
-                endVpnService();
-                return;
-            }
+        try {
+            mProfile.writeConfigFileOutput(this, ((OpenVPNThread) processThread).getOpenVPNStdin());
+        } catch (IOException | ExecutionException | InterruptedException e) {
+            VpnStatus.logException("Error generating config file", e);
+            endVpnService();
+            return;
         }
 
         DeviceStateReceiver oldDeviceStateReceiver = mDeviceStateReceiver;
@@ -668,16 +657,7 @@ public class OpenVPNService extends VpnService implements StateListener, Callbac
         }
     }
 
-    private OpenVPNManagement instantiateOpenVPN3Core() {
-        try {
-            Class<?> cl = Class.forName("de.blinkt.openvpn.core.OpenVPNThreadv3");
-            return (OpenVPNManagement) cl.getConstructor(OpenVPNService.class, VpnProfile.class).newInstance(this, mProfile);
-        } catch (IllegalArgumentException | InstantiationException | InvocationTargetException |
-                NoSuchMethodException | ClassNotFoundException | IllegalAccessException e) {
-            e.printStackTrace();
-        }
-        return null;
-    }
+    // instantiateOpenVPN3Core method removed - OpenVPN3 support disabled
 
 
     @Override
